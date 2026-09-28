@@ -49,7 +49,7 @@ Deben aparecer `[simulador] conectado a http://servidor-web:5000` y
    - La onda IR se dibuja con latidos (pico + muesca dicrótica) a unos 72 BPM.
    - El tiempo baja cada segundo.
    - Muestras sube unas 50 por segundo.
-5. Al terminar la sesión: Estado `done`, Tiempo `0:00`. Con `SIM_DURATION_SEC=8`
+5. Al terminar la sesión: Estado `uploading` y enseguida `done` (el JSONL ya está en el watcher, ver `watcher/TESTING.md`), Tiempo `0:00`. Con `SIM_DURATION_SEC=8`
    el contador llega a 400 muestras exactas (8 s × 50 Hz).
 
 ## 4. Cancelar con `abort`
@@ -82,7 +82,7 @@ Al revés, `docker compose stop simulador-pi` debe poner la página en
 Levantar solo los servicios del PC:
 
 ```bash
-docker compose up -d postgres servidor-web
+docker compose up -d postgres servidor-web watcher
 ```
 
 La Pi se conecta a `http://<ip-pc>:5000` con Socket.IO, envía `register_pi {}`

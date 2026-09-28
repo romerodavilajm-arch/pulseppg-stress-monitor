@@ -1,6 +1,6 @@
 
-# PulsePPG Stress Monitor — compose de las fases 1 y 2.
-# PostgreSQL, servidor-web y un simulador de la Pi. watcher, spark y modelo se
+# PulsePPG Stress Monitor — compose de las fases 1 a 4.
+# PostgreSQL, servidor-web, watcher y un simulador de la Pi. spark y modelo se
 # añaden en fases posteriores sobre este mismo archivo.
 
 name: pulseppg
@@ -45,18 +45,50 @@ services:
       timeout: 3s
       retries: 10
 
-  # Hace de Pi mientras no hay hardware: se registra en servidor-web y emite
-  # samples sintéticos al recibir "start". Para usar la Pi real:
-  #   docker compose up -d postgres servidor-web
+  # Recibe el JSONL por POST /upload, verifica el SHA-256 y lo deja en
+  # /data/raw/ con la sesión en 'uploaded'. Para ver los archivos:
+  #   docker compose exec watcher ls -l /data/raw
+  watcher:
+    build: ./watcher
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}
+    # Publicado para que la Pi real pueda subir desde la red local.
+    ports:
+      - "5001:5001"
+    volumes:
+      # Mismo volumen que leerán spark y modelo en las fases 5 y 6.
+      - rawdata:/data/raw
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Hace de Pi mientras no hay hardware: se registra en servidor-web, emite
+  # samples sintéticos al recibir "start", escribe el JSONL y lo sube al
+  # watcher. Para usar la Pi real:
+  #   docker compose up -d postgres servidor-web watcher
   simulador-pi:
-    build: ./simulador
+    build:
+      context: ./simulador
+      # writer.py y transfer.py se copian desde pi/: mismo código que la Pi real.
+      additional_contexts:
+        pi: ./pi
     restart: unless-stopped
     environment:
       SERVER_URL: http://servidor-web:5000
+      WATCHER_URL: http://watcher:5001
       DURATION_SEC: ${SIM_DURATION_SEC:-300}
     depends_on:
       servidor-web:
         condition: service_healthy
+      watcher:
+        condition: service_healthy
 
 volumes:
   pgdata:
+  rawdata:

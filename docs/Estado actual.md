@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 2 — WebSocket Pi ↔ servidor-web ✅ Completada con simulador (falta probar con la Pi real)
+Fase 4 — POST con checksum al watcher ✅ Completada con simulador (falta probar con la Pi real)
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -17,13 +17,17 @@ Fase 2 — WebSocket Pi ↔ servidor-web ✅ Completada con simulador (falta pro
 - Página mínima que dibuja la onda IR en vivo (canvas, sin Chart.js todavía) con botones Comenzar/Cancelar
 - Simulador de la Pi (`simulador/`) que emite una señal PPG sintética a 50 Hz; en compose como `simulador-pi`
 - Guía de verificación servidor-web/TESTING.md
+- watcher (Flask, :5001) con `POST /upload`: verifica SHA-256 y formato del JSONL, idempotencia por `session_id` (200 en reintentos, 409 si la sesión ya avanzó), deja el archivo en `/data/raw/` (volumen `rawdata`) y la sesión en `uploaded`. Escribe primero en `/data/raw/.incoming/` para que el watchdog de la Fase 5 nunca vea archivos a medias
+- `pi/writer.py` (JSONL) y `pi/transfer.py` (SHA-256, 3 intentos con 0/2/5 s, `completed/` y `pending/`): código de la Pi que no depende del sensor; el simulador lo usa tal cual
+- El simulador escribe el JSONL, lo sube al terminar y emite `status: uploading` y luego `done` (o `upload_failed`); al abortar borra el JSONL
+- Guía de verificación watcher/TESTING.md
 
 ## En progreso
-- Fase 2 — probar el mismo protocolo con la Pi real y el MAX30102
+- Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
 
 ## Pendiente
-- Fase 3 — Captura completa en la Pi
-- Fase 4 — POST con checksum al watcher
+- Fase 3 — Captura completa en la Pi: falta la lectura del MAX30102 y la validación de calidad; la escritura del JSONL ya está en `pi/writer.py`
+- Fase 4 — ✅ con simulador (ver Completado)
 - Fase 5 — Watchdog + lanzamiento de Spark
 - Fase 6 — Modelo de clasificación
 - Fase 7 — Máquina de estados ✅ ya aplicada en la base (ver Completado)
@@ -33,7 +37,7 @@ Fase 2 — WebSocket Pi ↔ servidor-web ✅ Completada con simulador (falta pro
 - Fase 11 — Compose completo
 
 ## Bloqueos
-Ninguno.
+- Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
 
 ## Próximos pasos
-Escribir el cliente de la Pi (Fase 3) con el mismo protocolo que `simulador/simulador.py`.
+Fase 5: watchdog sobre `/data/raw/` en el watcher y lanzamiento de Spark (`uploaded` → `processing`).
