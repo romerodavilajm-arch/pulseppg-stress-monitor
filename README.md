@@ -19,7 +19,7 @@ Sistema de adquisición de señal PPG con hardware de bajo costo (Raspberry Pi 5
 
 ## Estado
 
-🚧 En desarrollo — Fase 1: Esquema de base de datos
+🚧 En desarrollo — Fase 4: transferencia al watcher (con simulador). Ver [Estado actual](docs/Estado%20actual.md).
 
 ## Licencia
 

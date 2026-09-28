@@ -348,7 +348,7 @@ created → uploaded → processing → ready
 |---------|---------|
 | `sample` | `{t, ir, red}` |
 | `countdown` | `{value}` |
-| `status` | `{value: capturing \| paused \| restarting \| done \| aborted}` |
+| `status` | `{value: capturing \| paused \| restarting \| uploading \| done \| upload_failed \| aborted}` |
 | `register_pi` | `{}` |
 
 **servidor-web → Pi**:
@@ -357,6 +357,8 @@ created → uploaded → processing → ready
 |---------|---------|
 | `start` | `{}` |
 | `abort` | `{}` |
+
+**Nota sobre `uploading`, `done` y `upload_failed`**: al terminar la captura la Pi emite `uploading` mientras hace el POST al watcher, y `done` cuando el watcher confirma (200 o 409). Si los 3 intentos fallan emite `upload_failed`; el archivo queda en `/tmp/ppg/pending/` y se reintenta antes de la siguiente sesión.
 
 **Nota sobre `abort`**: el navegador puede enviarlo en cualquier momento durante la captura. El servidor-web lo reenvía a la Pi. La Pi detiene la captura, borra el archivo local, emite `status: aborted` y vuelve a esperar. El servidor-web marca la sesión como `error` en PostgreSQL.
 
@@ -392,6 +394,8 @@ Campos:
   - checksum: string (SHA-256)
   - duration: float
   - quality: string
+  - device_id: string (opcional)
+  - start_time: ISO 8601 (opcional; si falta, ahora - duration)
   - file: archivo JSONL
 ```
 

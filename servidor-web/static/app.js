@@ -57,6 +57,9 @@ socket.on("status", ({ value }) => {
   $("status").textContent = value;
   capturing = value === "capturing" || value === "paused" || value === "restarting";
   updateButtons();
+  if (value === "upload_failed") {
+    showMessage("No se pudo subir la sesión al watcher; se reintentará antes de la próxima.");
+  }
 });
 
 socket.on("aborted", () => showMessage("Prueba cancelada."));
