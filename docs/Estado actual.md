@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 4 — POST con checksum al watcher ✅ Completada con simulador (falta probar con la Pi real)
+Fase 5 — Watchdog + lanzamiento de Spark ✅ Completada con simulador
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -21,6 +21,10 @@ Fase 4 — POST con checksum al watcher ✅ Completada con simulador (falta prob
 - `pi/writer.py` (JSONL) y `pi/transfer.py` (SHA-256, 3 intentos con 0/2/5 s, `completed/` y `pending/`): código de la Pi que no depende del sensor; el simulador lo usa tal cual
 - El simulador escribe el JSONL, lo sube al terminar y emite `status: uploading` y luego `done` (o `upload_failed`); al abortar borra el JSONL
 - Guía de verificación watcher/TESTING.md
+- Watchdog en el watcher (`watcher/watch.py`): detecta cada `<session_id>.jsonl` que llega a `/data/raw/` (ignora `.incoming/` y ocultos)
+- Lanzador de análisis (`watcher/runner.py`): pasa la sesión a `processing`, lanza un contenedor efímero de Spark con el volumen `rawdata` en solo lectura, reintenta una vez tras 3 s y deja la sesión en `ready` o en `error` con el motivo (el crudo se conserva). Al arrancar retoma las sesiones en `uploaded` o `processing`
+- Spark (`spark/hrv.py`, imagen oficial Spark 4.0.1): lee el JSONL con `spark.read.json()`, detecta picos en IR con funciones de ventana, calcula BPM, SDNN, RMSSD y pNN50 y escribe `peaks` y `metrics` de forma idempotente. Con la señal simulada da 72 BPM y SDNN ≈ 32 ms
+- Guía de verificación spark/TESTING.md
 
 ## En progreso
 - Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
@@ -28,7 +32,7 @@ Fase 4 — POST con checksum al watcher ✅ Completada con simulador (falta prob
 ## Pendiente
 - Fase 3 — Captura completa en la Pi: falta la lectura del MAX30102 y la validación de calidad; la escritura del JSONL ya está en `pi/writer.py`
 - Fase 4 — ✅ con simulador (ver Completado)
-- Fase 5 — Watchdog + lanzamiento de Spark
+- Fase 5 — ✅ con simulador (ver Completado)
 - Fase 6 — Modelo de clasificación
 - Fase 7 — Máquina de estados ✅ ya aplicada en la base (ver Completado)
 - Fase 8 — Pantalla única con 4 estados
@@ -40,4 +44,4 @@ Fase 4 — POST con checksum al watcher ✅ Completada con simulador (falta prob
 - Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
 
 ## Próximos pasos
-Fase 5: watchdog sobre `/data/raw/` en el watcher y lanzamiento de Spark (`uploaded` → `processing`).
+Fase 6: contenedor `modelo` (Pulse-PPG) que llena `stress_windows`; se añade como segundo paso en `ANALYSIS_STEPS` de `watcher/runner.py`. Mientras no exista, el watcher marca `ready` en cuanto Spark termina bien.
