@@ -1,5 +1,5 @@
 
-# PulsePPG Stress Monitor — compose de las fases 1 a 6.
+# PulsePPG Stress Monitor — compose de las fases 1 a 8.
 # PostgreSQL, servidor-web, watcher, spark y modelo (efímeros) y un simulador
 # de la Pi.
 
@@ -36,6 +36,9 @@ services:
   servidor-web:
     build: ./servidor-web
     restart: unless-stopped
+    environment:
+      # Solo lee: estado, resultados y últimas sesiones para la pantalla.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}
     # Único puerto publicado: el navegador y la Pi real llegan por aquí.
     ports:
       - "5000:5000"
@@ -44,6 +47,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Recibe el JSONL por POST /upload, verifica el SHA-256 y lo deja en
   # /data/raw/ con la sesión en 'uploaded'. Un watchdog vigila esa carpeta y

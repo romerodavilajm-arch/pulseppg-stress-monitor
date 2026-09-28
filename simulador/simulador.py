@@ -5,7 +5,7 @@ sección 8), pero en lugar del MAX30102 genera una señal PPG sintética:
 
   1. Se conecta por Socket.IO y envía `register_pi`.
   2. Espera `start`.
-  3. Emite `status: capturing`, un `sample {t, ir, red}` cada 1/50 s y un
+  3. Emite `status: capturing` (cada `status` lleva el `session_id`), un `sample {t, ir, red}` cada 1/50 s y un
      `countdown {value}` cada segundo, durante DURATION_SEC.
   4. Escribe cada muestra en /tmp/ppg/<session_id>.jsonl (pi/writer.py).
   5. Al terminar emite `status: uploading`, sube el JSONL al watcher con
@@ -81,7 +81,7 @@ def run_session():
     session_id = new_session_id(DEVICE_ID, start)
     writer = SessionWriter(PPG_DIR, session_id)
     log(f"captura {session_id} iniciada ({DURATION_SEC} s a {SAMPLE_RATE} Hz)")
-    send("status", {"value": "capturing"})
+    send("status", {"value": "capturing", "session_id": session_id})
     send("countdown", {"value": DURATION_SEC})
 
     dt = 1.0 / SAMPLE_RATE
@@ -95,7 +95,7 @@ def run_session():
         if stop.wait(max(delay, 0)):
             writer.discard()
             log(f"captura {session_id} abortada, JSONL borrado")
-            send("status", {"value": "aborted"})
+            send("status", {"value": "aborted", "session_id": session_id})
             return
 
         t = i * dt
@@ -119,10 +119,10 @@ def run_session():
     log(f"captura {session_id} terminada: {writer.samples} muestras en {writer.path}")
 
     if not WATCHER_URL:
-        send("status", {"value": "done"})
+        send("status", {"value": "done", "session_id": session_id})
         return
 
-    send("status", {"value": "uploading"})
+    send("status", {"value": "uploading", "session_id": session_id})
     meta = {
         "session_id": session_id,
         "device_id": DEVICE_ID,
@@ -133,7 +133,7 @@ def run_session():
         "quality": "simulada",
     }
     ok = transfer.upload(WATCHER_URL, writer.path, meta, PPG_DIR)
-    send("status", {"value": "done" if ok else "upload_failed"})
+    send("status", {"value": "done" if ok else "upload_failed", "session_id": session_id})
 
 
 @sio.event
