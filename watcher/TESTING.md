@@ -4,6 +4,11 @@ Guía manual para verificar que, al terminar una sesión, el JSONL llega al
 watcher con su SHA-256, aparece en `/data/raw/` y la sesión queda en
 `uploaded` en PostgreSQL. Se usa el simulador como Pi.
 
+Desde la Fase 5 cada archivo aceptado se analiza enseguida: donde esta guía
+dice `uploaded`, unos 15 s después la sesión ya estará en `ready` (o en
+`error` si el archivo no tiene latidos). El análisis se prueba en
+[spark/TESTING.md](../spark/TESTING.md).
+
 ## 1. Levantar todo con sesiones cortas
 
 ```bash
@@ -106,9 +111,8 @@ Sesión ya registrada por servidor-web (`created`, aún no lo hace; se simula a 
 docker compose exec postgres psql -U pulseppg -d pulseppg \
   -c "INSERT INTO sessions (session_id, start_time) VALUES ('prueba_created', now())"
 up prueba_created $SUM s.jsonl          # 200, "outcome":"created -> uploaded"
-docker compose exec postgres psql -U pulseppg -d pulseppg \
-  -c "UPDATE sessions SET status = 'processing' WHERE session_id = 'prueba_created'"
-up prueba_created $SUM s.jsonl          # 409 la sesión ya está en 'processing'
+# El watcher la analiza (Fase 5); cuando ya avanzó, el mismo POST se rechaza:
+up prueba_created $SUM s.jsonl          # 409 la sesión ya está en 'processing' (o 'ready')
 ```
 
 `/data/raw/.incoming/` debe quedar vacío después de todas las pruebas: ahí solo

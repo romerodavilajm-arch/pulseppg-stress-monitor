@@ -1,4 +1,4 @@
-"""watcher — Fase 4: recepción del archivo crudo por HTTP.
+"""watcher — Fases 4 y 5: recepción del archivo crudo y lanzamiento del análisis.
 
 POST /upload (docs/Propuesta técnica.md, sección 8), multipart/form-data:
 
@@ -23,7 +23,9 @@ El archivo se escribe primero en /data/raw/.incoming/ y solo se mueve a
 /data/raw/ cuando el checksum coincide y la base lo acepta, así quien vigile
 /data/raw/ (el watchdog de la Fase 5) nunca ve un archivo a medias.
 
-Aún no vigila la carpeta ni lanza Spark: eso es de la Fase 5.
+Fase 5: watch.py vigila /data/raw/ y runner.py lanza Spark por cada archivo
+nuevo ('uploaded' -> 'processing' -> 'ready' o 'error'). Al arrancar se
+retoman las sesiones que quedaron en 'uploaded' o 'processing'.
 """
 
 import hashlib
@@ -36,6 +38,9 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg
 from flask import Flask, jsonify, request
+
+import runner
+import watch
 
 RAW_DIR = os.environ.get("RAW_DIR", "/data/raw")
 INCOMING_DIR = os.path.join(RAW_DIR, ".incoming")
@@ -200,6 +205,15 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
     os.makedirs(INCOMING_DIR, exist_ok=True)
+
+    # Fase 5: primero el watchdog y luego la recuperación, así ningún archivo
+    # queda sin atender entre las dos. Si una sesión se encola dos veces, el
+    # runner la procesa una sola (la segunda ya no está en 'uploaded').
+    analysis = runner.Runner()
+    analysis.start()
+    watch.watch(RAW_DIR, analysis.submit)
+    analysis.recover()
+
     port = int(os.environ.get("PORT", "5001"))
     # Werkzeug con hilos basta para una Pi en la red local.
     app.run(host="0.0.0.0", port=port, threaded=True)
