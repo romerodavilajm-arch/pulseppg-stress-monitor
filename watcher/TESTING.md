@@ -57,9 +57,9 @@ Debe devolver `{"ok":true}` (el watcher llega a PostgreSQL).
 ## 3. Cancelar no sube nada
 
 Presionar "Comenzar prueba" y a los pocos segundos "Cancelar". El Estado pasa
-a `aborted`, no aparece ningún archivo nuevo en `/data/raw/` ni fila nueva en
-`sessions`, y en el simulador no queda el JSONL de esa sesión
-(`find /tmp/ppg -type f`).
+a `aborted` y no aparece ningún archivo nuevo en `/data/raw/`; en el simulador
+no queda el JSONL de esa sesión (`find /tmp/ppg -type f`). Desde la Fase 9 sí
+queda una fila en `sessions`, en `error` y sin checksum (ver sección 6).
 
 ## 4. Watcher caído: `pending/` y reintento
 
@@ -134,3 +134,46 @@ docker compose up -d postgres servidor-web watcher
 docker compose down        # conserva la base y /data/raw
 docker compose down -v     # borra también los volúmenes pgdata y rawdata
 ```
+
+## 6. Fase 9: `POST /abort`
+
+Tras cancelar desde el navegador:
+
+```bash
+docker compose logs simulador-pi watcher | grep abort
+```
+```
+[simulador] captura 20260928T195410Z_sim01 abortada a los 6.1 s, JSONL borrado
+[simulador] transfer: 20260928T195410Z_sim01: abort registrado en el watcher
+watcher abort 20260928T195410Z_sim01 OK (created -> error): pk=1, 6.1 s capturados
+```
+
+```bash
+docker compose exec postgres psql -U pulseppg -d pulseppg \
+  -c "SELECT session_id, status, status_detail, duration_sec, checksum FROM sessions" \
+  -c "SELECT session_pk, from_status, to_status, detail FROM session_events"
+```
+
+La sesión está en `error` con `abort: cancelada por el usuario a los 6 s`, la
+duración parcial y sin checksum; el historial tiene `created` y
+`created -> error`.
+
+**Watcher caído**: con `docker compose stop watcher`, cancelar una captura
+vuelve a bienvenida igual (el aviso tarda como mucho 3 s) y el aviso queda en
+`/tmp/ppg/pending/<session_id>.abort.json`. Tras `docker compose start watcher`,
+la siguiente sesión lo reintenta antes de capturar
+(`reintentando el abort desde pending/` → `abort registrado en el watcher`).
+
+Casos a mano:
+
+```bash
+ab() { curl -s -w " [%{http_code}]\n" "$@" localhost:5001/abort; }
+```
+
+| Prueba | Comando | Esperado |
+|--------|---------|----------|
+| Reintento del mismo abort | `ab -F session_id=<abortada> -F duration=6` | `200`, `"outcome":"reintento"` |
+| Sesión ya subida | `ab -F session_id=<subida> -F duration=6` | `409 la sesión ya está en '...'` |
+| `session_id` con `..` | `ab -F session_id=../x -F duration=1` | `400 session_id inválido` |
+| Sin `duration` | `ab -F session_id=prueba_x` | `400` |
+| Sesión en `created` | insertar `prueba_created` como en la sección 5 y `ab -F session_id=prueba_created -F duration=12.5` | `200`, `"outcome":"created -> error"` |

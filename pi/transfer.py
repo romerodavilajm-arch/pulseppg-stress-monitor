@@ -8,6 +8,8 @@ Estructura en disco (BASE_DIR, por defecto /tmp/ppg):
   completed/<session_id>.jsonl  el watcher la confirmó (200 o 409)
   pending/<session_id>.jsonl    falló tras 3 intentos; se reintenta más tarde
   pending/<session_id>.json     metadata para ese reintento
+  pending/<session_id>.abort.json  aviso de cancelación que el watcher no
+                                   recibió (Fase 9); se reintenta igual
 """
 
 import hashlib
@@ -22,6 +24,9 @@ import requests
 # Espera antes de cada intento: 0 s, 2 s, 5 s (sección 8).
 BACKOFF_SEC = (0, 2, 5)
 TIMEOUT_SEC = 30
+# El aviso de abort se manda antes de volver a bienvenida: un solo intento
+# corto para no dejar al usuario esperando si el watcher no responde.
+ABORT_TIMEOUT_SEC = 3
 
 log = logging.getLogger("transfer")
 
@@ -79,12 +84,46 @@ def upload(watcher_url, path, meta, base_dir):
     return False
 
 
+def _post_abort(watcher_url, meta):
+    """Un intento. True si ya no hay nada que reintentar (200, 400 o 409)."""
+    resp = requests.post(f"{watcher_url}/abort", data=meta, timeout=ABORT_TIMEOUT_SEC)
+    if resp.status_code == 200:
+        return True
+    log.warning("%s: el watcher respondió %d al abort (%s)", meta["session_id"], resp.status_code, resp.text.strip())
+    # 400 y 409 no cambian al reintentar; solo 5xx vale la pena guardarlo.
+    return resp.status_code < 500
+
+
+def report_abort(watcher_url, meta, base_dir):
+    """Fase 9: avisa al watcher que la sesión se canceló (queda en 'error').
+
+    meta: session_id, duration (segundos capturados), device_id, start_time.
+    Si el watcher no responde, el aviso queda en pending/ y se reintenta con
+    retry_pending. Devuelve True si el watcher lo registró.
+    """
+    try:
+        if _post_abort(watcher_url, meta):
+            log.info("%s: abort registrado en el watcher", meta["session_id"])
+            return True
+    except requests.RequestException as exc:
+        log.warning("%s: abort sin respuesta del watcher (%s)", meta["session_id"], exc)
+    pending = os.path.join(base_dir, "pending")
+    os.makedirs(pending, exist_ok=True)
+    with open(os.path.join(pending, f"{meta['session_id']}.abort.json"), "w") as f:
+        json.dump(meta, f)
+    log.error("%s: el abort queda en pending/", meta["session_id"])
+    return False
+
+
 def retry_pending(watcher_url, base_dir):
     """Reintenta lo que quedó en pending/ (al arrancar y antes de cada sesión)."""
     pending = os.path.join(base_dir, "pending")
     if not os.path.isdir(pending):
         return
     for name in sorted(os.listdir(pending)):
+        if name.endswith(".abort.json"):
+            _retry_abort(watcher_url, os.path.join(pending, name))
+            continue
         if not name.endswith(".jsonl"):
             continue
         path = os.path.join(pending, name)
@@ -98,6 +137,22 @@ def retry_pending(watcher_url, base_dir):
         log.info("%s: reintentando desde pending/", meta["session_id"])
         if upload(watcher_url, path, meta, base_dir):
             os.remove(meta_path)
+
+
+def _retry_abort(watcher_url, path):
+    try:
+        with open(path) as f:
+            meta = json.load(f)
+    except (OSError, ValueError):
+        log.error("%s: aviso de abort ilegible, se deja en pending/", os.path.basename(path))
+        return
+    log.info("%s: reintentando el abort desde pending/", meta["session_id"])
+    try:
+        if _post_abort(watcher_url, meta):
+            os.remove(path)
+            log.info("%s: abort registrado en el watcher", meta["session_id"])
+    except requests.RequestException as exc:
+        log.warning("%s: abort sin respuesta del watcher (%s)", meta["session_id"], exc)
 
 
 def clear_completed(base_dir):

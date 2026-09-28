@@ -225,10 +225,11 @@ En cualquier momento durante la captura, el navegador puede enviar `abort` al se
 1. Detiene la captura inmediatamente.
 2. Cierra el JSONL.
 3. **Borra el archivo local** (no se transfiere, no se analiza).
-4. Emite `status: aborted`.
-5. Vuelve al estado de espera.
+4. Avisa al watcher con `POST /abort` (session_id y segundos capturados).
+5. Emite `status: aborted`.
+6. Vuelve al estado de espera.
 
-El servidor-web marca la sesión en PostgreSQL como `error` (o la elimina, según se prefiera), y el navegador vuelve a la pantalla de bienvenida.
+El watcher marca la sesión en PostgreSQL como `error` con la duración parcial y `status_detail` "abort: ...", y el navegador vuelve a la pantalla de bienvenida, donde la sesión aparece como cancelada. Lo registra el watcher y no el servidor-web para que este siga siendo pasivo (solo lee) y porque el watcher ya es quien crea las sesiones.
 
 **Motivo del abort**: el usuario decide cancelar antes de terminar los 5 minutos. Casos típicos: se siente incómodo, se equivocó al iniciar, necesita interrumpir. El sistema no debe procesar datos incompletos.
 
@@ -318,7 +319,7 @@ uploaded      watcher                     Al recibir el POST
 processing    watcher                     Antes de lanzar Spark
 ready         watcher                     Tras Spark y modelo OK
 error         watcher                     Si Spark o modelo fallan 2 veces
-                                           o si el usuario aborta
+                                           o si el usuario aborta (POST /abort)
 ```
 
 **Transiciones válidas**:
@@ -362,7 +363,7 @@ created → uploaded → processing → ready
 
 **Nota sobre `session_id` en `status`**: la Pi genera el `session_id` y lo incluye en cada `status`. Así el servidor-web puede avisar `analyzing {session_id}` al navegador cuando llega `done`, y el navegador sabe qué sesión consultar en `/api/estado/<session_id>`.
 
-**Nota sobre `abort`**: el navegador puede enviarlo en cualquier momento durante la captura. El servidor-web lo reenvía a la Pi. La Pi detiene la captura, borra el archivo local, emite `status: aborted` y vuelve a esperar. El servidor-web marca la sesión como `error` en PostgreSQL.
+**Nota sobre `abort`**: el navegador puede enviarlo en cualquier momento durante la captura. El servidor-web lo reenvía a la Pi. La Pi detiene la captura, borra el archivo local, avisa al watcher con `POST /abort` (la sesión queda en `error`), emite `status: aborted` y vuelve a esperar.
 
 **servidor-web → Navegador**:
 
@@ -412,6 +413,29 @@ Campos:
 | 500 | Error del watcher |
 
 **Reintentos en la Pi**: 3 intentos con backoff de 0 s, 2 s, 5 s.
+
+**POST /abort** (Fase 9)
+
+```
+Content-Type: multipart/form-data (o urlencoded)
+
+Campos:
+  - session_id: string
+  - duration: float (segundos capturados antes de cancelar)
+  - device_id: string (opcional)
+  - start_time: ISO 8601 (opcional; si falta, ahora - duration)
+```
+
+El watcher crea la sesión en `created` si no existía y la pasa a `error` en la misma transacción (el historial registra `created` y `created → error`).
+
+| Código | Significado |
+|--------|-------------|
+| 200 | Sesión en `error` (también si ya estaba abortada: reintento) |
+| 400 | Campos inválidos |
+| 409 | La sesión ya está en otro estado (el abort llegó tarde) |
+| 500 | Error del watcher |
+
+**Reintentos en la Pi**: un solo intento de 3 s antes de emitir `aborted`, para no hacer esperar al usuario. Si falla, el aviso queda en `/tmp/ppg/pending/<session_id>.abort.json` y se reintenta junto con los uploads pendientes.
 
 ### HTTP — Navegador ↔ servidor-web
 

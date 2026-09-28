@@ -219,10 +219,18 @@ async function loadResults(sessionId) {
   show("resultados");
 }
 
+// Fase 9: el watcher marca las capturas canceladas con status_detail "abort: ...".
+function isAborted(status, detail) {
+  return status === "error" && (detail || "").startsWith("abort");
+}
+
 function renderResults({ session, metrics, windows, summary, events }) {
   const ok = session.status === "ready";
   $("resultado-ok").hidden = !ok;
   $("resultado-error").hidden = ok;
+  $("r-error-titulo").textContent = isAborted(session.status, session.status_detail)
+    ? "Prueba cancelada"
+    : "La sesión no se pudo analizar";
   $("r-error").textContent = ok ? "" : session.status_detail || `Estado: ${session.status}`;
 
   const m = metrics || {};
@@ -326,7 +334,7 @@ async function loadSessions() {
   for (const r of rows) {
     const tr = document.createElement("tr");
     cell(tr, fmtTime(r.start_time));
-    cell(tr, r.status);
+    cell(tr, isAborted(r.status, r.status_detail) ? "cancelada" : r.status);
     cell(tr, fmt(r.bpm));
     const td = cell(tr, "");
     if (r.status === "ready" || r.status === "error") {

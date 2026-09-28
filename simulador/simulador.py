@@ -1,4 +1,4 @@
-"""Simulador de la Pi — fases 2 a 4.
+"""Simulador de la Pi — fases 2 a 4 y 9.
 
 Se comporta como la Pi frente al servidor-web (docs/Propuesta técnica.md,
 sección 8), pero en lugar del MAX30102 genera una señal PPG sintética:
@@ -12,7 +12,8 @@ sección 8), pero en lugar del MAX30102 genera una señal PPG sintética:
      SHA-256 y 3 intentos (pi/transfer.py) y emite `status: done`, o
      `status: upload_failed` si el watcher no confirmó (queda en pending/ y se
      reintenta antes de la siguiente sesión).
-  Si llega `abort`, se detiene, borra el JSONL y emite `status: aborted`.
+  Si llega `abort`, se detiene, borra el JSONL, avisa al watcher (POST /abort,
+  la sesión queda en 'error' con la duración parcial) y emite `status: aborted`.
 
 writer.py y transfer.py son el mismo código que usará la Pi real (carpeta pi/).
 
@@ -94,7 +95,17 @@ def run_session():
         delay = t0 + i * dt - time.monotonic()
         if stop.wait(max(delay, 0)):
             writer.discard()
-            log(f"captura {session_id} abortada, JSONL borrado")
+            log(f"captura {session_id} abortada a los {i * dt:.1f} s, JSONL borrado")
+            if WATCHER_URL:
+                # Fase 9: la sesión queda en 'error' con la duración parcial.
+                # Antes de emitir `aborted`, para que la lista de bienvenida
+                # ya la muestre como cancelada.
+                transfer.report_abort(WATCHER_URL, {
+                    "session_id": session_id,
+                    "device_id": DEVICE_ID,
+                    "start_time": start.isoformat(),
+                    "duration": round(i * dt, 2),
+                }, PPG_DIR)
             send("status", {"value": "aborted", "session_id": session_id})
             return
 

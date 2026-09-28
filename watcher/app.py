@@ -1,4 +1,5 @@
-"""watcher — Fases 4 y 5: recepción del archivo crudo y lanzamiento del análisis.
+"""watcher — Fases 4, 5 y 9: recepción del archivo crudo, lanzamiento del
+análisis y registro de las capturas canceladas.
 
 POST /upload (docs/Propuesta técnica.md, sección 8), multipart/form-data:
 
@@ -26,6 +27,9 @@ El archivo se escribe primero en /data/raw/.incoming/ y solo se mueve a
 Fase 5: watch.py vigila /data/raw/ y runner.py lanza Spark por cada archivo
 nuevo ('uploaded' -> 'processing' -> 'ready' o 'error'). Al arrancar se
 retoman las sesiones que quedaron en 'uploaded' o 'processing'.
+
+Fase 9: POST /abort registra una captura cancelada ('created' -> 'error').
+El watcher sigue siendo el único que escribe sesiones; el servidor-web solo lee.
 """
 
 import hashlib
@@ -83,6 +87,25 @@ def validate_jsonl(path):
     return count, None
 
 
+def parse_times(form):
+    """(duration, start_time, error) a partir de los campos del formulario."""
+    try:
+        duration = float(form["duration"])
+        if duration < 0:
+            raise ValueError
+    except (KeyError, ValueError):
+        return None, None, "duration debe ser un número >= 0"
+    try:
+        start_time = datetime.fromisoformat(form["start_time"]) if form.get("start_time") else None
+    except ValueError:
+        return None, None, "start_time debe estar en ISO 8601"
+    if start_time is None:
+        start_time = datetime.now(timezone.utc) - timedelta(seconds=duration)
+    elif start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    return duration, start_time, None
+
+
 @app.get("/health")
 def health():
     try:
@@ -106,20 +129,9 @@ def upload():
         return fail(400, "checksum debe ser SHA-256 en hexadecimal", session_id)
     if upfile is None:
         return fail(400, "falta el campo file", session_id)
-    try:
-        duration = float(form["duration"])
-        if duration < 0:
-            raise ValueError
-    except (KeyError, ValueError):
-        return fail(400, "duration debe ser un número >= 0", session_id)
-    try:
-        start_time = datetime.fromisoformat(form["start_time"]) if form.get("start_time") else None
-    except ValueError:
-        return fail(400, "start_time debe estar en ISO 8601", session_id)
-    if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(seconds=duration)
-    elif start_time.tzinfo is None:
-        start_time = start_time.replace(tzinfo=timezone.utc)
+    duration, start_time, error = parse_times(form)
+    if error:
+        return fail(400, error, session_id)
     quality = form.get("quality") or None
     device_id = form.get("device_id") or None
 
@@ -199,6 +211,71 @@ def upload():
     finally:
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+
+@app.post("/abort")
+def abort():
+    """Fase 9: la Pi avisa que el usuario canceló una captura.
+
+    Campos (multipart/form-data o urlencoded): session_id, duration (segundos
+    capturados antes de cancelar), device_id y start_time opcionales.
+
+    La sesión queda en 'error' con status_detail "abort: ..." y la duración
+    parcial, sin archivo ni análisis. Si no existía se crea en 'created' y se
+    pasa a 'error' en la misma transacción, así el historial registra las dos
+    transiciones (created -> error, sección 7).
+
+      200  sesión en 'error' (también si ya estaba abortada: reintento)
+      400  campos inválidos
+      409  la sesión ya se subió: el abort llegó tarde y no se toca
+      500  error de base de datos
+    """
+    form = request.form
+    session_id = form.get("session_id", "")
+    if not SESSION_ID_RE.match(session_id):
+        return fail(400, "session_id inválido", session_id)
+    duration, start_time, error = parse_times(form)
+    if error:
+        return fail(400, error, session_id)
+    device_id = form.get("device_id") or None
+    detail = f"abort: cancelada por el usuario a los {duration:.0f} s"
+
+    try:
+        with psycopg.connect(DATABASE_URL) as conn, conn.transaction():
+            conn.execute(
+                """
+                INSERT INTO sessions (session_id, device_id, start_time, duration_sec,
+                                      status, status_detail)
+                VALUES (%s, %s, %s, %s, 'created', 'start')
+                ON CONFLICT (session_id) DO NOTHING
+                """,
+                (session_id, device_id, start_time, duration),
+            )
+            pk, status, stored_detail = conn.execute(
+                "SELECT id, status, status_detail FROM sessions WHERE session_id = %s FOR UPDATE",
+                (session_id,),
+            ).fetchone()
+            if status == "error" and (stored_detail or "").startswith("abort"):
+                outcome = "reintento"
+            elif status == "created":
+                conn.execute(
+                    """
+                    UPDATE sessions
+                    SET status = 'error', status_detail = %s, duration_sec = %s,
+                        device_id = COALESCE(device_id, %s)
+                    WHERE id = %s
+                    """,
+                    (detail, duration, device_id, pk),
+                )
+                outcome = "created -> error"
+            else:
+                return fail(409, f"la sesión ya está en '{status}'", session_id)
+    except psycopg.Error:
+        log.exception("abort %s: error de base de datos", session_id)
+        return jsonify({"ok": False, "error": "error de base de datos"}), 500
+
+    log.info("abort %s OK (%s): pk=%d, %.1f s capturados", session_id, outcome, pk, duration)
+    return jsonify({"ok": True, "session_pk": pk, "outcome": outcome})
 
 
 if __name__ == "__main__":

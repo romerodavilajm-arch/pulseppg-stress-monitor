@@ -38,6 +38,11 @@
 - Línea de tiempo con HTML y CSS (una barra por ventana, altura = probabilidad), sin Chart.js: 10 ventanas no justifican una librería más.
 - El pulso en vivo durante la captura es una estimación del navegador sobre los últimos 10 s; el que cuenta es el de Spark en los resultados.
 
+## Cancelación (Fase 9)
+- El abort lo registra el watcher (`POST /abort` desde la Pi), no el servidor-web: el servidor-web sigue sin escribir y el watcher sigue siendo el único que crea sesiones. La propuesta decía "servidor-web"; se cambió por esto.
+- La sesión abortada se conserva en `error` con la duración parcial y `status_detail` "abort: ...", no se borra (pregunta abierta 7). Se crea en `created` y pasa a `error` en la misma transacción, así el historial muestra ambas transiciones sin tocar la máquina de estados.
+- La Pi avisa al watcher antes de emitir `aborted`, con un solo intento de 3 s: la lista de bienvenida ya muestra la sesión como "cancelada" y el usuario no espera reintentos. Si falla, el aviso va a `pending/` y se reintenta como los uploads.
+
 ## Descartado
 - Kafka: añade componente sin resolver problema real.
 - Spark Streaming: latencia no es prioridad.
