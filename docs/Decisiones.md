@@ -30,6 +30,14 @@
 - Respaldo local en /tmp: la Pi conserva el crudo hasta siguiente sesión.
 - Cancelación con abort: el usuario puede interrumpir sin dejar residuos.
 
+## Pantalla (Fase 8)
+- Una sola página con 4 estados (bienvenida, captura, analizando, resultados) que cambian sin recargar.
+- El servidor-web sigue pasivo: solo lee PostgreSQL. La sesión la crea el watcher al recibir el POST; no se inserta en `created` al pulsar "Comenzar".
+- La Pi incluye el `session_id` en cada `status`; el navegador lo usa para consultar `/api/estado` cada 2 s tras `done` (no hace falta `results_ready`).
+- Estado global de la sesión según la fracción de ventanas clasificadas como estrés: menos de 1/3 bajo, menos de 2/3 moderado, si no alto.
+- Línea de tiempo con HTML y CSS (una barra por ventana, altura = probabilidad), sin Chart.js: 10 ventanas no justifican una librería más.
+- El pulso en vivo durante la captura es una estimación del navegador sobre los últimos 10 s; el que cuenta es el de Spark en los resultados.
+
 ## Descartado
 - Kafka: añade componente sin resolver problema real.
 - Spark Streaming: latencia no es prioridad.

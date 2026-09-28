@@ -348,7 +348,7 @@ created → uploaded → processing → ready
 |---------|---------|
 | `sample` | `{t, ir, red}` |
 | `countdown` | `{value}` |
-| `status` | `{value: capturing \| paused \| restarting \| uploading \| done \| upload_failed \| aborted}` |
+| `status` | `{value: capturing \| paused \| restarting \| uploading \| done \| upload_failed \| aborted, session_id}` |
 | `register_pi` | `{}` |
 
 **servidor-web → Pi**:
@@ -360,6 +360,8 @@ created → uploaded → processing → ready
 
 **Nota sobre `uploading`, `done` y `upload_failed`**: al terminar la captura la Pi emite `uploading` mientras hace el POST al watcher, y `done` cuando el watcher confirma (200 o 409). Si los 3 intentos fallan emite `upload_failed`; el archivo queda en `/tmp/ppg/pending/` y se reintenta antes de la siguiente sesión.
 
+**Nota sobre `session_id` en `status`**: la Pi genera el `session_id` y lo incluye en cada `status`. Así el servidor-web puede avisar `analyzing {session_id}` al navegador cuando llega `done`, y el navegador sabe qué sesión consultar en `/api/estado/<session_id>`.
+
 **Nota sobre `abort`**: el navegador puede enviarlo en cualquier momento durante la captura. El servidor-web lo reenvía a la Pi. La Pi detiene la captura, borra el archivo local, emite `status: aborted` y vuelve a esperar. El servidor-web marca la sesión como `error` en PostgreSQL.
 
 **servidor-web → Navegador**:
@@ -369,10 +371,11 @@ created → uploaded → processing → ready
 | `sample` | `{t, ir, red}` |
 | `countdown` | `{value}` |
 | `status` | `{value}` |
-| `analyzing` | `{}` |
-| `results_ready` | `{session_id}` |
+| `analyzing` | `{session_id}` |
+| `results_ready` | No se usa: el navegador detecta `ready` consultando `/api/estado` (fase 7 del flujo) |
 | `aborted` | `{}` |
 | `error` | `{message}` |
+| `new` | `{}` (todos los navegadores vuelven a bienvenida) |
 
 **Navegador → servidor-web**:
 
