@@ -19,6 +19,10 @@ cada 2 s y, al llegar a 'ready', pide GET /api/resultados/<session_id>.
 
 El servidor sigue siendo pasivo (docs/Decisiones.md): solo lee PostgreSQL.
 Las sesiones las crea el watcher al recibir el POST.
+
+Fase 9: el `abort` del navegador se reenvía a la Pi; la Pi registra la
+cancelación en el watcher (POST /abort, sesión en 'error') antes de emitir
+`status: aborted`, y el servidor avisa `aborted` a los navegadores.
 """
 
 import logging
@@ -159,7 +163,7 @@ def api_resultados(session_id):
 def api_sesiones():
     with db() as conn:
         rows = conn.execute(
-            "SELECT s.session_id, s.start_time, s.status, m.bpm"
+            "SELECT s.session_id, s.start_time, s.status, s.status_detail, m.bpm"
             " FROM sessions s LEFT JOIN metrics m ON m.session_pk = s.id"
             " ORDER BY s.start_time DESC LIMIT 10"
         ).fetchall()

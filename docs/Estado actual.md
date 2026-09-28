@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 8 — Pantalla única con 4 estados ✅ Probada de punta a punta con el simulador
+Fase 9 — Cancelación con `abort` ✅ Probada de punta a punta con el simulador
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -32,6 +32,7 @@ Fase 8 — Pantalla única con 4 estados ✅ Probada de punta a punta con el sim
 - Pantalla única (Fase 8): bienvenida con instrucciones y últimas sesiones, captura en vivo (onda, contador, pulso estimado, calidad), "Analizando..." con polling de `/api/estado` cada 2 s, y resultados (BPM, SDNN, RMSSD, estado global, línea de tiempo de `stress_windows` y detalle técnico con ventanas e historial de estados). "Nueva sesión" vuelve a bienvenida. Una sesión en `error` muestra el motivo
 - servidor-web: `GET /api/estado/<session_id>`, `GET /api/resultados/<session_id>` y `GET /api/sesiones` (solo lectura de PostgreSQL)
 - La Pi (y el simulador) incluye el `session_id` en cada `status`
+- Cancelación (Fase 9): al abortar, la Pi borra el JSONL, avisa al watcher con `POST /abort` y emite `aborted`. El watcher deja la sesión en `error` con la duración parcial y `status_detail` "abort: ..." (historial `created` → `error`). Si el watcher no responde, el aviso queda en `pending/` y se reintenta. La lista de bienvenida la muestra como "cancelada" y su detalle dice "Prueba cancelada"
 
 ## En progreso
 - Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
@@ -43,7 +44,7 @@ Fase 8 — Pantalla única con 4 estados ✅ Probada de punta a punta con el sim
 - Fase 6 — ✅ (ver Completado)
 - Fase 7 — Máquina de estados ✅ ya aplicada en la base (ver Completado)
 - Fase 8 — ✅ con simulador (ver Completado)
-- Fase 9 — Cancelación con abort
+- Fase 9 — ✅ con simulador (ver Completado)
 - Fase 10 — Limpieza de sesiones viejas
 - Fase 11 — Compose completo
 
@@ -51,4 +52,4 @@ Fase 8 — Pantalla única con 4 estados ✅ Probada de punta a punta con el sim
 - Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
 
 ## Próximos pasos
-Fase 9: cancelación con `abort` que además marque la sesión como `error` en PostgreSQL. Hoy el abort ya detiene la captura, borra el JSONL y vuelve a bienvenida, pero como la sesión solo existe desde el POST no queda registro del intento.
+Fase 10: limpieza de sesiones viejas (máximo 10) y borrado del crudo en `/data/raw/` tras el análisis.

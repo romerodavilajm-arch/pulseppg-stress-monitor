@@ -1,4 +1,4 @@
-# Pruebas del servidor-web: fases 2 y 8
+# Pruebas del servidor-web: fases 2, 8 y 9
 
 Guía manual para verificar que las muestras viajan de la Pi (o del simulador) al
 navegador, que `start` y `abort` viajan en sentido contrario (Fase 2) y que la
@@ -65,6 +65,11 @@ Deben aparecer `[simulador] conectado a http://servidor-web:5000` y
    Pi status: aborted
    ```
 4. "Comenzar prueba" vuelve a estar activo y se puede repetir.
+5. Fase 9: en "Sesiones anteriores" aparece arriba la sesión con estado
+   `cancelada`. "Ver" muestra "Prueba cancelada" con el motivo
+   (`abort: cancelada por el usuario a los N s`) y, en el detalle técnico, la
+   duración parcial y el historial `created` → `error`. Lo registra el watcher
+   (ver [watcher/TESTING.md](../watcher/TESTING.md), sección 6).
 
 ## 5. Reconexión
 
