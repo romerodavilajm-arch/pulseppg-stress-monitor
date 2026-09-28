@@ -1,7 +1,7 @@
 
-# PulsePPG Stress Monitor — compose reducido para la Fase 1.
-# Solo PostgreSQL. servidor-web, watcher, spark y modelo se añaden en fases
-# posteriores sobre este mismo archivo.
+# PulsePPG Stress Monitor — compose de las fases 1 y 2.
+# PostgreSQL, servidor-web y un simulador de la Pi. watcher, spark y modelo se
+# añaden en fases posteriores sobre este mismo archivo.
 
 name: pulseppg
 
@@ -32,6 +32,31 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
+
+  servidor-web:
+    build: ./servidor-web
+    restart: unless-stopped
+    # Único puerto publicado: el navegador y la Pi real llegan por aquí.
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Hace de Pi mientras no hay hardware: se registra en servidor-web y emite
+  # samples sintéticos al recibir "start". Para usar la Pi real:
+  #   docker compose up -d postgres servidor-web
+  simulador-pi:
+    build: ./simulador
+    restart: unless-stopped
+    environment:
+      SERVER_URL: http://servidor-web:5000
+      DURATION_SEC: ${SIM_DURATION_SEC:-300}
+    depends_on:
+      servidor-web:
+        condition: service_healthy
 
 volumes:
   pgdata:

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PulsePPG</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main>
+    <h1>PulsePPG</h1>
+
+    <p class="estado">
+      Pi: <span id="pi" class="off">desconectada</span>
+      · Estado: <span id="status">en espera</span>
+      · Tiempo: <span id="countdown">--:--</span>
+      · Muestras: <span id="count">0</span>
+    </p>
+
+    <div class="botones">
+      <button id="start" disabled>Comenzar prueba</button>
+      <button id="abort" disabled>Cancelar</button>
+    </div>
+
+    <canvas id="onda" width="900" height="300"></canvas>
+    <p class="nota">Señal IR, últimos 5 segundos.</p>
+    <p id="mensaje" class="mensaje"></p>
+  </main>
+
+  <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
