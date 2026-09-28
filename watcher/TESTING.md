@@ -1,4 +1,4 @@
-# Pruebas de la Fase 4: transferencia del JSONL al watcher
+# Pruebas del watcher: transferencia (Fase 4), abort (Fase 9) y limpieza (Fase 10)
 
 Guía manual para verificar que, al terminar una sesión, el JSONL llega al
 watcher con su SHA-256, aparece en `/data/raw/` y la sesión queda en
@@ -177,3 +177,63 @@ ab() { curl -s -w " [%{http_code}]\n" "$@" localhost:5001/abort; }
 | `session_id` con `..` | `ab -F session_id=../x -F duration=1` | `400 session_id inválido` |
 | Sin `duration` | `ab -F session_id=prueba_x` | `400` |
 | Sesión en `created` | insertar `prueba_created` como en la sección 5 y `ab -F session_id=prueba_created -F duration=12.5` | `200`, `"outcome":"created -> error"` |
+
+## 8. Fase 10: limpieza
+
+Con sesiones de 15 s (con 8 s Spark no junta 10 intervalos RR y la sesión
+termina en `error`):
+
+```bash
+SIM_DURATION_SEC=15 docker compose up -d simulador-pi
+```
+
+**Crudo borrado tras el análisis.** Hacer una sesión completa. Al quedar en
+`ready`, el log del watcher dice `<session_id>: crudo borrado` y
+`/data/raw/` solo tiene `.incoming/`:
+
+```bash
+docker compose logs watcher | grep cleanup
+docker compose exec watcher ls -A /data/raw
+```
+
+Una sesión que termina en `error` (por ejemplo, de 8 s) conserva su crudo.
+
+**Retención de 10 sesiones.** Hacer más de 10 sesiones, mezclando completas y
+canceladas. Desde la undécima, cada sesión que termina (también un abort)
+borra la más vieja:
+
+```
+watcher.cleanup retención: 1 sesión(es) viejas borradas: 20260928T202010Z_sim01
+```
+
+```bash
+docker compose exec postgres psql -U pulseppg -d pulseppg \
+  -c "SELECT id, session_id, status FROM sessions ORDER BY start_time" \
+  -c "SELECT (SELECT count(*) FROM metrics) m, (SELECT count(*) FROM peaks) p,
+             (SELECT count(*) FROM stress_windows) w, (SELECT count(*) FROM session_events) e"
+```
+
+Quedan 10 filas y métricas, picos, ventanas e historial solo de esas 10 (ON
+DELETE CASCADE). Si la sesión borrada estaba en `error` con crudo, también se
+borra el crudo. Las sesiones que siguen en curso (`created`, `uploaded`,
+`processing`) nunca se borran, y la que acaba de terminar tampoco aunque su
+`start_time` sea más viejo que las otras 10 (un reintento desde `pending/`):
+sale en la siguiente limpieza.
+
+**Barrido al arrancar.** Dejar basura y reiniciar el watcher:
+
+```bash
+docker compose exec watcher sh -c 'echo x > /data/raw/huerfano.jsonl;
+  echo x > /data/raw/.incoming/foo.abc.part;
+  echo x > /data/raw/<session_id en ready>.jsonl'
+docker compose restart watcher
+docker compose logs --since 30s watcher | grep cleanup
+```
+
+```
+watcher.cleanup barrido: temporal foo.abc.part borrado
+watcher.cleanup <session_id>: crudo borrado
+watcher.cleanup barrido: huerfano.jsonl sin sesión en la base, borrado
+```
+
+El número máximo se cambia con la variable `MAX_SESSIONS` del watcher.

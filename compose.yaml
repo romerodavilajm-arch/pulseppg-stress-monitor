@@ -1,5 +1,5 @@
 
-# PulsePPG Stress Monitor — compose de las fases 1 a 9.
+# PulsePPG Stress Monitor — compose de las fases 1 a 10.
 # PostgreSQL, servidor-web, watcher, spark y modelo (efímeros) y un simulador
 # de la Pi.
 
@@ -54,8 +54,8 @@ services:
   # Recibe el JSONL por POST /upload, verifica el SHA-256 y lo deja en
   # /data/raw/ con la sesión en 'uploaded'. Un watchdog vigila esa carpeta y
   # por cada archivo nuevo lanza un contenedor efímero de spark y luego uno de
-  # modelo. Para ver los
-  # archivos:
+  # modelo. Con la sesión en 'ready' borra el crudo y conserva solo las 10
+  # sesiones más recientes (MAX_SESSIONS). Para ver los archivos:
   #   docker compose exec watcher ls -l /data/raw
   watcher:
     build: ./watcher

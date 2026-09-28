@@ -30,6 +30,10 @@ retoman las sesiones que quedaron en 'uploaded' o 'processing'.
 
 Fase 9: POST /abort registra una captura cancelada ('created' -> 'error').
 El watcher sigue siendo el único que escribe sesiones; el servidor-web solo lee.
+
+Fase 10 (cleanup.py): borra el crudo cuando la sesión queda en 'ready',
+conserva solo las 10 sesiones más recientes y al arrancar barre lo que haya
+quedado a medias.
 """
 
 import hashlib
@@ -43,6 +47,7 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from flask import Flask, jsonify, request
 
+import cleanup
 import runner
 import watch
 
@@ -275,13 +280,15 @@ def abort():
         return jsonify({"ok": False, "error": "error de base de datos"}), 500
 
     log.info("abort %s OK (%s): pk=%d, %.1f s capturados", session_id, outcome, pk, duration)
+    cleanup.after_session(keep_pk=pk)
     return jsonify({"ok": True, "session_pk": pk, "outcome": outcome})
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
-    os.makedirs(INCOMING_DIR, exist_ok=True)
+    # Fase 10: antes de aceptar uploads, así ningún .part es de un upload en curso.
+    cleanup.sweep_on_start()
 
     # Fase 5: primero el watchdog y luego la recuperación, así ningún archivo
     # queda sin atender entre las dos. Si una sesión se encola dos veces, el
