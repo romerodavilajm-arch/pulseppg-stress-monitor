@@ -18,6 +18,10 @@
 ## Análisis
 - Análisis batch: el caso de uso no requiere tiempo real.
 - Pulse-PPG preentrenado: no hay dataset etiquetado propio.
+- Pulse-PPG da embeddings, no etiquetas: el encoder se usa congelado y encima va una regresión logística entrenada una vez sobre WESAD (dataset público de estrés). Es lo mismo que la evaluación "linear probe" del paper; no se reentrena la red.
+- Ventanas de 30 s también al entrenar el clasificador (el paper usa 60 s): así `stress_windows` no cambia de esquema.
+- PyTorch solo CPU en la imagen del modelo: una sesión son ~10 ventanas y tarda segundos; no hace falta GPU.
+- Modelo en un contenedor propio, no dentro de la imagen de Spark: PyTorch no depende de la JVM y cada imagen se reconstruye por separado.
 - Reintento único de Spark/modelo: dos fallas indican bug, no transitorio.
 
 ## Confiabilidad

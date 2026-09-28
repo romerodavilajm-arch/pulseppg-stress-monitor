@@ -1,19 +1,21 @@
-"""Lanzamiento de los contenedores de análisis (Fase 5: solo Spark).
+"""Lanzamiento de los contenedores de análisis (Spark y modelo).
 
 Por cada archivo nuevo en /data/raw/ (docs/Propuesta técnica.md, flujo de la
 Fase 5):
 
   1. Pasa la sesión de 'uploaded' a 'processing'.
-  2. Lanza un contenedor efímero de Spark:
-       python3 /app/hrv.py /data/raw/<session_id>.jsonl <session_pk>
-     con el volumen rawdata en solo lectura y en la misma red que PostgreSQL.
-  3. Si falla, espera 3 s y reintenta una vez; si vuelve a fallar, la sesión
-     pasa a 'error' con el motivo y el archivo se conserva.
-  4. Si todo sale bien, la sesión pasa a 'ready'.
+  2. Lanza, uno tras otro, los contenedores efímeros de ANALYSIS_STEPS con el
+     volumen rawdata en solo lectura y en la misma red que PostgreSQL:
+       spark:  python3 /app/hrv.py /data/raw/<session_id>.jsonl <session_pk>
+       modelo: python3 /app/infer.py /data/raw/<session_id>.jsonl <session_pk>
+     status_detail dice qué paso está corriendo.
+  3. Si un paso falla, espera 3 s y lo reintenta una vez; si vuelve a fallar,
+     la sesión pasa a 'error' con el motivo, el archivo se conserva y no se
+     corren los pasos siguientes.
+  4. Si todos salen bien, la sesión pasa a 'ready'.
 
-El modelo (Fase 6) se añadirá a ANALYSIS_STEPS. El borrado del crudo y la
-limpieza de sesiones viejas llegan en fases posteriores: por ahora el archivo
-se queda en /data/raw/.
+El borrado del crudo y la limpieza de sesiones viejas llegan en fases
+posteriores: por ahora el archivo se queda en /data/raw/.
 
 Las sesiones se procesan de una en una, en el orden en que llegan.
 """
@@ -35,12 +37,14 @@ DATABASE_URL = os.environ.get(
     "DATABASE_URL", "postgresql://pulseppg:pulseppg@postgres:5432/pulseppg"
 )
 SPARK_IMAGE = os.environ.get("SPARK_IMAGE", "pulseppg-spark")
+MODELO_IMAGE = os.environ.get("MODELO_IMAGE", "pulseppg-modelo")
 STEP_TIMEOUT_SEC = int(os.environ.get("STEP_TIMEOUT_SEC", "300"))
 RETRY_DELAY_SEC = 3
 
 # (nombre, imagen, comando). {path} y {pk} se sustituyen por sesión.
 ANALYSIS_STEPS = [
     ("spark", SPARK_IMAGE, ["python3", "/app/hrv.py", "{path}", "{pk}"]),
+    ("modelo", MODELO_IMAGE, ["python3", "/app/infer.py", "{path}", "{pk}"]),
 ]
 
 
@@ -51,7 +55,7 @@ class Runner:
         self._network, self._raw_volume = self._own_network_and_volume()
 
     def _own_network_and_volume(self):
-        """Red y volumen del propio watcher, para montarlos igual en Spark.
+        """Red y volumen del propio watcher, para montarlos igual en cada paso.
 
         Así no se fija el nombre del proyecto de compose (pulseppg_default,
         pulseppg_rawdata) en el código.
@@ -103,11 +107,11 @@ class Runner:
             with psycopg.connect(DATABASE_URL) as conn:
                 row = conn.execute(
                     """
-                    UPDATE sessions SET status = 'processing', status_detail = 'spark'
+                    UPDATE sessions SET status = 'processing', status_detail = %s
                     WHERE session_id = %s AND status IN ('uploaded', 'processing')
                     RETURNING id
                     """,
-                    (session_id,),
+                    (ANALYSIS_STEPS[0][0], session_id),
                 ).fetchone()
                 if row:
                     return row[0]
@@ -139,7 +143,9 @@ class Runner:
             return
         log.info("%s: 'processing' (pk=%d)", session_id, pk)
 
-        for name, image, command in ANALYSIS_STEPS:
+        for i, (name, image, command) in enumerate(ANALYSIS_STEPS):
+            if i > 0:
+                self._set_status(pk, "processing", name)
             argv = [arg.format(path=path, pk=pk) for arg in command]
             for attempt in (1, 2):
                 ok, detail = self._run(name, image, argv, pk, attempt)
@@ -181,7 +187,7 @@ class Runner:
                 container.kill()
                 return False, f"sin terminar tras {STEP_TIMEOUT_SEC} s"
             output = container.logs().decode(errors="replace").strip().splitlines()
-            # Solo las líneas propias del job; el resto es ruido del arranque de Spark.
+            # Solo las líneas propias del paso; el resto es ruido (arranque de Spark).
             ours = [line for line in output if line.startswith(f"[{name}]")] or output[-5:]
             for line in ours:
                 log.info("  %s", line)
