@@ -1,7 +1,7 @@
 
-# PulsePPG Stress Monitor — compose de las fases 1 a 5.
-# PostgreSQL, servidor-web, watcher, spark (efímero) y un simulador de la Pi.
-# modelo se añade en la Fase 6 sobre este mismo archivo.
+# PulsePPG Stress Monitor — compose de las fases 1 a 6.
+# PostgreSQL, servidor-web, watcher, spark y modelo (efímeros) y un simulador
+# de la Pi.
 
 name: pulseppg
 
@@ -47,7 +47,8 @@ services:
 
   # Recibe el JSONL por POST /upload, verifica el SHA-256 y lo deja en
   # /data/raw/ con la sesión en 'uploaded'. Un watchdog vigila esa carpeta y
-  # por cada archivo nuevo lanza un contenedor efímero de spark. Para ver los
+  # por cada archivo nuevo lanza un contenedor efímero de spark y luego uno de
+  # modelo. Para ver los
   # archivos:
   #   docker compose exec watcher ls -l /data/raw
   watcher:
@@ -56,22 +57,25 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}
       SPARK_IMAGE: pulseppg-spark
+      MODELO_IMAGE: pulseppg-modelo
     # Publicado para que la Pi real pueda subir desde la red local.
     ports:
       - "5001:5001"
     volumes:
-      # Mismo volumen que lee spark (y modelo en la Fase 6).
+      # Mismo volumen que leen spark y modelo.
       - rawdata:/data/raw
-      # Para lanzar spark como contenedor hermano ("compose run --rm spark" de
-      # la propuesta). Da al watcher control sobre Docker: aceptable en una
+      # Para lanzar spark y modelo como contenedores hermanos ("compose run
+      # --rm spark" de la propuesta). Da al watcher control sobre Docker: aceptable en una
       # PC de demo en red local, no en un servidor compartido.
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
-      # "compose up" construye la imagen de spark y comprueba que arranca
-      # antes de que el watcher pueda lanzarla.
+      # "compose up" construye las imágenes de spark y modelo y comprueba que
+      # arrancan antes de que el watcher pueda lanzarlas.
       spark:
+        condition: service_completed_successfully
+      modelo:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/health')"]
@@ -88,6 +92,26 @@ services:
     build: ./spark
     # Nombre fijo para que el watcher lance esta misma imagen.
     image: pulseppg-spark
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}
+    volumes:
+      - rawdata:/data/raw:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Efímero, como spark. En "compose up" comprueba que los pesos de Pulse-PPG
+  # cargan (y avisa si falta el clasificador) y termina; el watcher lo lanza
+  # por sesión después de spark con
+  #   python3 /app/infer.py /data/raw/<session_id>.jsonl <session_pk>
+  # A mano, sobre un archivo que ya esté en /data/raw/:
+  #   docker compose run --rm modelo python3 /app/infer.py /data/raw/<id>.jsonl --no-db
+  modelo:
+    # El build instala PyTorch (CPU) y descarga los pesos de Zenodo.
+    build: ./modelo
+    # Nombre fijo para que el watcher lance esta misma imagen.
+    image: pulseppg-modelo
     restart: "no"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}

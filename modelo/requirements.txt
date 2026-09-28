@@ -1,0 +1,6 @@
+numpy==2.4.6
+scipy==1.17.1
+# Fijado: el clasificador se guarda con joblib y debe cargarse con la misma versión.
+scikit-learn==1.9.1
+joblib==1.6.0
+psycopg[binary]==3.3.6

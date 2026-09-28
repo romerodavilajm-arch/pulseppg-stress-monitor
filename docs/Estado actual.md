@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 5 — Watchdog + lanzamiento de Spark ✅ Completada con simulador
+Fase 6 — Modelo de clasificación ✅ Código completo y probado con pesos de prueba; falta entrenar el clasificador con WESAD
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -25,6 +25,9 @@ Fase 5 — Watchdog + lanzamiento de Spark ✅ Completada con simulador
 - Lanzador de análisis (`watcher/runner.py`): pasa la sesión a `processing`, lanza un contenedor efímero de Spark con el volumen `rawdata` en solo lectura, reintenta una vez tras 3 s y deja la sesión en `ready` o en `error` con el motivo (el crudo se conserva). Al arrancar retoma las sesiones en `uploaded` o `processing`
 - Spark (`spark/hrv.py`, imagen oficial Spark 4.0.1): lee el JSONL con `spark.read.json()`, detecta picos en IR con funciones de ventana, calcula BPM, SDNN, RMSSD y pNN50 y escribe `peaks` y `metrics` de forma idempotente. Con la señal simulada da 72 BPM y SDNN ≈ 32 ms
 - Guía de verificación spark/TESTING.md
+- Modelo (`modelo/`, contenedor efímero): encoder Pulse-PPG (pesos de Zenodo bajados en el build, PyTorch solo CPU) + clasificador lineal propio. Corta la sesión en ventanas de 30 s, clasifica cada una en `estres` / `sin_estres` con su probabilidad y reemplaza las filas de `stress_windows`. El watcher lo lanza después de Spark (segundo paso de `ANALYSIS_STEPS`), con el mismo reintento; `status_detail` indica el paso en curso
+- `modelo/train.py`: entrenamiento único del clasificador sobre WESAD (BVP de muñeca, estrés vs base+diversión, validación dejando sujetos fuera). El resultado va en `modelo/artefactos/clasificador.joblib` y se versiona
+- Guía de verificación modelo/TESTING.md
 
 ## En progreso
 - Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
@@ -33,7 +36,7 @@ Fase 5 — Watchdog + lanzamiento de Spark ✅ Completada con simulador
 - Fase 3 — Captura completa en la Pi: falta la lectura del MAX30102 y la validación de calidad; la escritura del JSONL ya está en `pi/writer.py`
 - Fase 4 — ✅ con simulador (ver Completado)
 - Fase 5 — ✅ con simulador (ver Completado)
-- Fase 6 — Modelo de clasificación
+- Fase 6 — ✅ código (ver Completado); falta entrenar y versionar el clasificador (modelo/TESTING.md, sección 1)
 - Fase 7 — Máquina de estados ✅ ya aplicada en la base (ver Completado)
 - Fase 8 — Pantalla única con 4 estados
 - Fase 9 — Cancelación con abort
@@ -42,6 +45,7 @@ Fase 5 — Watchdog + lanzamiento de Spark ✅ Completada con simulador
 
 ## Bloqueos
 - Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
+- Clasificador de estrés sin entrenar: requiere descargar WESAD (≈2.5 GB) y correr `train.py` una vez. Mientras tanto cada sesión termina en `error` con el motivo "falta el clasificador" (Spark sí escribe `metrics` y `peaks`).
 
 ## Próximos pasos
-Fase 6: contenedor `modelo` (Pulse-PPG) que llena `stress_windows`; se añade como segundo paso en `ANALYSIS_STEPS` de `watcher/runner.py`. Mientras no exista, el watcher marca `ready` en cuanto Spark termina bien.
+Entrenar el clasificador con WESAD y versionarlo. Luego, Fase 8: pantalla única que muestre métricas y la línea de tiempo de `stress_windows`.
