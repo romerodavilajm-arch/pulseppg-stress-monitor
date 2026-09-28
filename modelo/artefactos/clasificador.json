@@ -1,0 +1,17 @@
+{
+  "window_sec": 30,
+  "fs": 50,
+  "labels": {
+    "0": "sin_estres",
+    "1": "estres"
+  },
+  "cv_f1_macro": 0.822,
+  "cv_balanced_accuracy": 0.844,
+  "C": 0.01,
+  "windows": 1071,
+  "subjects": 15,
+  "trained_on": "WESAD (BVP muñeca), estrés vs base+diversión",
+  "weights_sha256": "485ade5033b3baa9b82e252fc131042dda897d7bdfc0d1a030d9746a1e98857c",
+  "sklearn_version": "1.9.1",
+  "trained_at": "2026-09-28T14:49:46+00:00"
+}
