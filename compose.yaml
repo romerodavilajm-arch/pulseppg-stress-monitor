@@ -1,0 +1,37 @@
+
+# PulsePPG Stress Monitor — compose reducido para la Fase 1.
+# Solo PostgreSQL. servidor-web, watcher, spark y modelo se añaden en fases
+# posteriores sobre este mismo archivo.
+
+name: pulseppg
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-pulseppg}
+      POSTGRES_USER: ${POSTGRES_USER:-pulseppg}
+      # Red local sin autenticación en el alcance; se puede sobrescribir con un .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulseppg}
+    volumes:
+      # Volumen nombrado: los datos sobreviven a "down" y a reinicios.
+      - pgdata:/var/lib/postgresql/data
+      # init.sql solo se ejecuta cuando el volumen está vacío (primer arranque).
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Sin "ports": los demás contenedores llegan por la red interna de compose
+    # (host "postgres", puerto 5432). Para inspeccionar a mano:
+    #   docker compose exec postgres psql -U pulseppg -d pulseppg
+    healthcheck:
+      # Se consulta por TCP (-h 127.0.0.1) a propósito: durante la inicialización
+      # la imagen levanta un servidor temporal solo por socket Unix, así que el
+      # contenedor no se marca "healthy" hasta que init.sql terminó y arrancó el
+      # servidor definitivo.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  pgdata:
