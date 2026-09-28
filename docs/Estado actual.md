@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 1 — Esquema de base de datos ✅ Completada
+Fase 2 — WebSocket Pi ↔ servidor-web ✅ Completada con simulador (falta probar con la Pi real)
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -13,9 +13,13 @@ Fase 1 — Esquema de base de datos ✅ Completada
 - Constraint único de session_id verificado
 - compose.yaml mínimo con PostgreSQL
 - Documentos de verificación db/TESTING.md
+- servidor-web mínimo (Flask + Flask-SocketIO, :5000): reenvía `sample`, `countdown` y `status` de la Pi al navegador, y `start`/`abort` del navegador a la Pi. Aún no escribe en PostgreSQL
+- Página mínima que dibuja la onda IR en vivo (canvas, sin Chart.js todavía) con botones Comenzar/Cancelar
+- Simulador de la Pi (`simulador/`) que emite una señal PPG sintética a 50 Hz; en compose como `simulador-pi`
+- Guía de verificación servidor-web/TESTING.md
 
 ## En progreso
-- Fase 2 — WebSocket Pi ↔ servidor-web
+- Fase 2 — probar el mismo protocolo con la Pi real y el MAX30102
 
 ## Pendiente
 - Fase 3 — Captura completa en la Pi
@@ -32,4 +36,4 @@ Fase 1 — Esquema de base de datos ✅ Completada
 Ninguno.
 
 ## Próximos pasos
-Diseñar el WebSocket entre la Pi y el servidor-web para el dibujo en vivo.
+Escribir el cliente de la Pi (Fase 3) con el mismo protocolo que `simulador/simulador.py`.

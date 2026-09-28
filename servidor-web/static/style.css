@@ -1,0 +1,41 @@
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  background: #f6f7f9;
+  color: #1d2330;
+}
+
+main {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+h1 { margin: 0 0 12px; }
+
+.estado { font-variant-numeric: tabular-nums; }
+.on  { color: #1a7f37; font-weight: 600; }
+.off { color: #b42318; font-weight: 600; }
+
+.botones { margin: 16px 0; display: flex; gap: 8px; }
+
+button {
+  font-size: 1rem;
+  padding: 8px 16px;
+  border: 1px solid #1d2330;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+button:disabled { opacity: 0.4; cursor: default; }
+
+canvas {
+  width: 100%;
+  height: auto;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+}
+
+.nota { color: #667085; font-size: 0.9rem; }
+.mensaje { color: #b42318; min-height: 1.2em; }
