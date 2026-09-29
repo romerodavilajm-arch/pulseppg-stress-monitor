@@ -285,11 +285,16 @@ El watcher marca la sesión en PostgreSQL como `error` con la duración parcial 
 ```sql
 DELETE FROM sessions
 WHERE id NOT IN (
-    SELECT id FROM sessions ORDER BY start_time DESC LIMIT 10
+    SELECT id FROM sessions ORDER BY start_time DESC, id DESC LIMIT 10
 )
 AND id != <session_pk_actual>
-AND status = 'ready';
+AND status IN ('ready', 'error');
 ```
+
+La limpieza también corre tras un `abort` (las canceladas quedan en `error`) y
+al arrancar el watcher, que además borra temporales de `.incoming/`, el crudo
+de sesiones ya listas y archivos sin sesión. Si la sesión termina en `error`,
+su crudo se conserva hasta que la sesión sale de las 10 retenidas.
 
 ### Fase 7 — Resultados
 

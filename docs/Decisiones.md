@@ -43,6 +43,12 @@
 - La sesión abortada se conserva en `error` con la duración parcial y `status_detail` "abort: ...", no se borra (pregunta abierta 7). Se crea en `created` y pasa a `error` en la misma transacción, así el historial muestra ambas transiciones sin tocar la máquina de estados.
 - La Pi avisa al watcher antes de emitir `aborted`, con un solo intento de 3 s: la lista de bienvenida ya muestra la sesión como "cancelada" y el usuario no espera reintentos. Si falla, el aviso va a `pending/` y se reintenta como los uploads.
 
+## Limpieza (Fase 10)
+- La retención borra las sesiones fuera de las 10 más recientes que estén en `ready` o en `error`, no solo en `ready` como decía la propuesta: las cancelaciones quedan en `error` y si no se acumularían sin límite. Las que siguen en curso (`created`, `uploaded`, `processing`) nunca se borran, ni la que acaba de terminar aunque su `start_time` sea viejo (un reintento desde `pending/`): el navegador puede estar esperándola.
+- El crudo se borra solo cuando la sesión queda en `ready`; en `error` se conserva para revisarlo y se va cuando la sesión sale de las 10 retenidas.
+- La retención corre después de cada sesión que termina (análisis o `abort`) y al arrancar el watcher, no con un temporizador: solo cambia algo cuando llega una sesión.
+- Al arrancar, antes de aceptar uploads, el watcher barre lo que un corte pudo dejar: temporales de `.incoming/`, crudo de sesiones ya listas y archivos sin sesión en la base.
+
 ## Descartado
 - Kafka: añade componente sin resolver problema real.
 - Spark Streaming: latencia no es prioridad.

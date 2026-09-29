@@ -12,10 +12,9 @@ Fase 5):
   3. Si un paso falla, espera 3 s y lo reintenta una vez; si vuelve a fallar,
      la sesión pasa a 'error' con el motivo, el archivo se conserva y no se
      corren los pasos siguientes.
-  4. Si todos salen bien, la sesión pasa a 'ready'.
-
-El borrado del crudo y la limpieza de sesiones viejas llegan en fases
-posteriores: por ahora el archivo se queda en /data/raw/.
+  4. Si todos salen bien, la sesión pasa a 'ready' y se borra el crudo.
+  5. Termine como termine, se aplica la retención de 10 sesiones
+     (cleanup.py, Fase 10).
 
 Las sesiones se procesan de una en una, en el orden en que llegan.
 """
@@ -29,6 +28,8 @@ import time
 
 import docker
 import psycopg
+
+import cleanup
 
 log = logging.getLogger("watcher.runner")
 
@@ -89,10 +90,12 @@ class Runner:
     def _loop(self):
         while True:
             session_id = self._queue.get()
+            pk = None
             try:
-                self.process(session_id)
+                pk = self.process(session_id)
             except Exception:
                 log.exception("%s: error inesperado del runner", session_id)
+            cleanup.after_session(keep_pk=pk)
 
     def _claim(self, session_id):
         """Pasa la sesión a 'processing' y devuelve su pk, o None si no toca.
@@ -133,14 +136,15 @@ class Runner:
             )
 
     def process(self, session_id):
+        """Analiza la sesión y devuelve su pk (None si no le tocaba)."""
         pk = self._claim(session_id)
         if pk is None:
-            return
+            return None
         path = os.path.join(RAW_DIR, f"{session_id}.jsonl")
         if not os.path.isfile(path):
             self._set_status(pk, "error", f"no se encontró {path}")
             log.error("%s: no se encontró %s, sesión en 'error'", session_id, path)
-            return
+            return pk
         log.info("%s: 'processing' (pk=%d)", session_id, pk)
 
         for i, (name, image, command) in enumerate(ANALYSIS_STEPS):
@@ -159,10 +163,13 @@ class Runner:
                 self._set_status(pk, "error", f"{name}: {detail}"[:1000])
                 log.error("%s: %s falló dos veces, sesión en 'error'; se conserva %s",
                           session_id, name, path)
-                return
+                return pk
 
         self._set_status(pk, "ready", "análisis OK")
         log.info("%s: 'ready'", session_id)
+        # Los resultados ya están en la base; el respaldo vive en la Pi.
+        cleanup.delete_raw(session_id)
+        return pk
 
     def _run(self, name, image, argv, pk, attempt):
         """Corre un contenedor efímero y devuelve (ok, detalle)."""

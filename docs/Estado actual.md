@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 9 — Cancelación con `abort` ✅ Probada de punta a punta con el simulador
+Fase 10 — Limpieza de sesiones viejas y del crudo ✅ Probada de punta a punta con el simulador
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -33,6 +33,7 @@ Fase 9 — Cancelación con `abort` ✅ Probada de punta a punta con el simulado
 - servidor-web: `GET /api/estado/<session_id>`, `GET /api/resultados/<session_id>` y `GET /api/sesiones` (solo lectura de PostgreSQL)
 - La Pi (y el simulador) incluye el `session_id` en cada `status`
 - Cancelación (Fase 9): al abortar, la Pi borra el JSONL, avisa al watcher con `POST /abort` y emite `aborted`. El watcher deja la sesión en `error` con la duración parcial y `status_detail` "abort: ..." (historial `created` → `error`). Si el watcher no responde, el aviso queda en `pending/` y se reintenta. La lista de bienvenida la muestra como "cancelada" y su detalle dice "Prueba cancelada"
+- Limpieza (Fase 10, `watcher/cleanup.py`): al quedar una sesión en `ready` el watcher borra `/data/raw/<session_id>.jsonl` (en `error` lo conserva). Tras cada sesión que termina (lista, con error o cancelada) conserva solo las 10 más recientes por `start_time`: borra las más viejas que estén en `ready` o `error` (con su crudo, si quedaba) y ON DELETE CASCADE se lleva métricas, picos, ventanas e historial. Al arrancar barre los `.part` de `.incoming/`, el crudo de sesiones ya listas y los archivos sin sesión en la base
 
 ## En progreso
 - Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
@@ -45,11 +46,11 @@ Fase 9 — Cancelación con `abort` ✅ Probada de punta a punta con el simulado
 - Fase 7 — Máquina de estados ✅ ya aplicada en la base (ver Completado)
 - Fase 8 — ✅ con simulador (ver Completado)
 - Fase 9 — ✅ con simulador (ver Completado)
-- Fase 10 — Limpieza de sesiones viejas
+- Fase 10 — ✅ con simulador (ver Completado)
 - Fase 11 — Compose completo
 
 ## Bloqueos
 - Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
 
 ## Próximos pasos
-Fase 10: limpieza de sesiones viejas (máximo 10) y borrado del crudo en `/data/raw/` tras el análisis.
+Fase 11: compose completo (un solo `docker compose up` levanta todo y el sistema se prueba de punta a punta).
