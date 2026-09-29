@@ -29,7 +29,7 @@ let piConnected = false;
 let count = 0;
 let points = [];        // IR de la ventana visible
 let recent = [];        // IR de los últimos BPM_SEC segundos
-let dirty = false;
+let dirty = true;
 let pollTimer = null;
 let analysisId = null;
 
@@ -384,6 +384,61 @@ setInterval(() => {
 
 const canvas = $("onda");
 const ctx = canvas.getContext("2d");
+const COLOR_ONDA = "#c01048";
+const COLOR_TEXTO = "#475467";
+const COLOR_REJILLA = "#eaecf0";
+// Márgenes del área de la señal: arriba el título y la leyenda, a la
+// izquierda y abajo los nombres de los ejes.
+const M = { top: 40, right: 30, bottom: 40, left: 44 };
+
+// Título, leyenda, rejilla y ejes. La señal viene sin calibrar (cuentas del
+// ADC del sensor), así que el eje vertical se rotula en unidades arbitrarias.
+function drawFrame(width, height) {
+  const w = width - M.left - M.right;
+  const h = height - M.top - M.bottom;
+
+  ctx.font = "bold 15px system-ui, sans-serif";
+  ctx.fillStyle = "#101828";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Pulso en tiempo real (fotopletismografía, PPG)", M.left, 20);
+
+  ctx.font = "13px system-ui, sans-serif";
+  ctx.fillStyle = COLOR_TEXTO;
+  ctx.textAlign = "right";
+  const leyenda = "Señal infrarroja (IR) del sensor";
+  ctx.fillText(leyenda, width - M.right, 20);
+  const lx = width - M.right - ctx.measureText(leyenda).width - 30;
+  ctx.strokeStyle = COLOR_ONDA;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(lx, 20);
+  ctx.lineTo(lx + 22, 20);
+  ctx.stroke();
+
+  // Una línea vertical por segundo, rotulada con los segundos hasta ahora.
+  ctx.strokeStyle = COLOR_REJILLA;
+  ctx.lineWidth = 1;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (let s = 0; s <= WINDOW_SEC; s++) {
+    const x = M.left + (s / WINDOW_SEC) * w;
+    ctx.beginPath();
+    ctx.moveTo(x, M.top);
+    ctx.lineTo(x, M.top + h);
+    ctx.stroke();
+    ctx.fillText(s === WINDOW_SEC ? "ahora" : `-${WINDOW_SEC - s}`, x, M.top + h + 4);
+  }
+  ctx.strokeRect(M.left, M.top, w, h);
+
+  ctx.fillText("Tiempo (s)", M.left + w / 2, M.top + h + 22);
+  ctx.save();
+  ctx.translate(16, M.top + h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textBaseline = "middle";
+  ctx.fillText("Amplitud (u. a.)", 0, 0);
+  ctx.restore();
+}
 
 function draw() {
   if (dirty) {
@@ -392,7 +447,10 @@ function draw() {
 
     const { width, height } = canvas;
     ctx.clearRect(0, 0, width, height);
+    drawFrame(width, height);
     if (points.length > 1) {
+      const w = width - M.left - M.right;
+      const h = height - M.top - M.bottom;
       // Autoescala sobre la ventana visible, con 10 % de margen.
       let min = Math.min(...points);
       let max = Math.max(...points);
@@ -400,12 +458,14 @@ function draw() {
       min -= pad;
       max += pad;
 
+      // Alineada a la derecha: la muestra más reciente siempre cae en "ahora".
+      const offset = MAX_POINTS - points.length;
       ctx.beginPath();
-      ctx.strokeStyle = "#c01048";
+      ctx.strokeStyle = COLOR_ONDA;
       ctx.lineWidth = 2;
       points.forEach((v, i) => {
-        const x = (i / (MAX_POINTS - 1)) * width;
-        const y = height - ((v - min) / (max - min)) * height;
+        const x = M.left + ((offset + i) / (MAX_POINTS - 1)) * w;
+        const y = M.top + h - ((v - min) / (max - min)) * h;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
