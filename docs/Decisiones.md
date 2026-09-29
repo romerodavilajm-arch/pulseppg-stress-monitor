@@ -49,6 +49,11 @@
 - La retención corre después de cada sesión que termina (análisis o `abort`) y al arrancar el watcher, no con un temporizador: solo cambia algo cuando llega una sesión.
 - Al arrancar, antes de aceptar uploads, el watcher barre lo que un corte pudo dejar: temporales de `.incoming/`, crudo de sesiones ya listas y archivos sin sesión en la base.
 
+## Compose completo (Fase 11)
+- El simulador de la Pi sigue en el `compose up` por defecto: sin sensor es la única fuente de datos. Con la Pi real se levantan solo `postgres servidor-web watcher`.
+- La prueba de punta a punta corre en su propio contenedor (perfil `e2e`), no en la máquina: la única dependencia sigue siendo Docker. Usa lo mismo que el navegador (Socket.IO y la API HTTP), no consulta PostgreSQL directo, así prueba también al servidor-web.
+- `up --wait` funciona con spark y modelo: Compose acepta que un servicio de solo comprobación termine con código 0.
+
 ## Descartado
 - Kafka: añade componente sin resolver problema real.
 - Spark Streaming: latencia no es prioridad.
