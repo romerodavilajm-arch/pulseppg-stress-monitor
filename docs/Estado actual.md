@@ -1,7 +1,7 @@
 # Estado actual del proyecto
 
 ## Fase
-Fase 10 — Limpieza de sesiones viejas y del crudo ✅ Probada de punta a punta con el simulador
+Fase 11 — Compose completo ✅ Probada de punta a punta con el simulador
 
 ## Completado
 - Repositorio en GitHub creado con estructura inicial
@@ -34,6 +34,8 @@ Fase 10 — Limpieza de sesiones viejas y del crudo ✅ Probada de punta a punta
 - La Pi (y el simulador) incluye el `session_id` en cada `status`
 - Cancelación (Fase 9): al abortar, la Pi borra el JSONL, avisa al watcher con `POST /abort` y emite `aborted`. El watcher deja la sesión en `error` con la duración parcial y `status_detail` "abort: ..." (historial `created` → `error`). Si el watcher no responde, el aviso queda en `pending/` y se reintenta. La lista de bienvenida la muestra como "cancelada" y su detalle dice "Prueba cancelada"
 - Limpieza (Fase 10, `watcher/cleanup.py`): al quedar una sesión en `ready` el watcher borra `/data/raw/<session_id>.jsonl` (en `error` lo conserva). Tras cada sesión que termina (lista, con error o cancelada) conserva solo las 10 más recientes por `start_time`: borra las más viejas que estén en `ready` o `error` (con su crudo, si quedaba) y ON DELETE CASCADE se lleva métricas, picos, ventanas e historial. Al arrancar barre los `.part` de `.incoming/`, el crudo de sesiones ya listas y los archivos sin sesión en la base
+- Compose completo (Fase 11): `docker compose up -d --build --wait` construye y levanta todo en una máquina con solo Docker (3 permanentes sanos, spark y modelo comprueban su imagen y terminan, simulador conectado). Variables opcionales en `.env.example` (credenciales, `SIM_DURATION_SEC`, `MAX_SESSIONS`)
+- Prueba automática de punta a punta (`e2e/prueba.py`, perfil `e2e`): `docker compose --profile e2e run --rm e2e` hace de navegador, corre una sesión completa (hasta `ready` con métricas, ventanas, historial y crudo borrado) y una cancelada (`error` con "abort: ..."), y sale con 0 o 1. Guía en e2e/TESTING.md
 
 ## En progreso
 - Fases 2 y 4 — probar con la Pi real y el MAX30102 (a la espera del sensor)
@@ -47,10 +49,10 @@ Fase 10 — Limpieza de sesiones viejas y del crudo ✅ Probada de punta a punta
 - Fase 8 — ✅ con simulador (ver Completado)
 - Fase 9 — ✅ con simulador (ver Completado)
 - Fase 10 — ✅ con simulador (ver Completado)
-- Fase 11 — Compose completo
+- Fase 11 — ✅ con simulador (ver Completado)
 
 ## Bloqueos
 - Sin sensor MAX30102 todavía: el código de la Pi que lee el sensor espera; se avanza con el simulador.
 
 ## Próximos pasos
-Fase 11: compose completo (un solo `docker compose up` levanta todo y el sistema se prueba de punta a punta).
+Las 11 fases de la hoja de ruta están hechas con el simulador. Falta la Fase 3 con hardware: leer el MAX30102 y validar la calidad en la Pi 5, y repetir la prueba de punta a punta con la Pi real (e2e/TESTING.md, sección 5).

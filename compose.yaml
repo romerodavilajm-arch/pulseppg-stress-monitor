@@ -1,7 +1,15 @@
 
-# PulsePPG Stress Monitor — compose de las fases 1 a 10.
-# PostgreSQL, servidor-web, watcher, spark y modelo (efímeros) y un simulador
-# de la Pi.
+# PulsePPG Stress Monitor — sistema completo (Fase 11).
+#
+# Un solo comando construye y levanta todo:
+#   docker compose up -d --build
+# 3 permanentes (postgres, servidor-web, watcher), 2 efímeros (spark y modelo:
+# en "up" solo comprueban su imagen y terminan; el watcher los lanza por
+# sesión) y el simulador de la Pi mientras no haya sensor. La demo queda en
+# http://localhost:5000. Variables opcionales en .env (ver .env.example).
+#
+# Prueba de punta a punta, con el sistema ya levantado (e2e/TESTING.md):
+#   docker compose --profile e2e run --rm e2e
 
 name: pulseppg
 
@@ -64,6 +72,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-pulseppg}:${POSTGRES_PASSWORD:-pulseppg}@postgres:5432/${POSTGRES_DB:-pulseppg}
       SPARK_IMAGE: pulseppg-spark
       MODELO_IMAGE: pulseppg-modelo
+      MAX_SESSIONS: ${MAX_SESSIONS:-10}
     # Publicado para que la Pi real pueda subir desde la red local.
     ports:
       - "5001:5001"
@@ -142,6 +151,24 @@ services:
       SERVER_URL: http://servidor-web:5000
       WATCHER_URL: http://watcher:5001
       DURATION_SEC: ${SIM_DURATION_SEC:-300}
+    depends_on:
+      servidor-web:
+        condition: service_healthy
+      watcher:
+        condition: service_healthy
+
+  # Solo con "--profile e2e": hace de navegador, corre una sesión completa y
+  # una cancelada, y comprueba estados, resultados y borrado del crudo.
+  e2e:
+    build: ./e2e
+    profiles: ["e2e"]
+    restart: "no"
+    environment:
+      WEB_URL: http://servidor-web:5000
+      WATCHER_URL: http://watcher:5001
+    volumes:
+      # Para comprobar que el crudo se borra al quedar la sesión en 'ready'.
+      - rawdata:/data/raw:ro
     depends_on:
       servidor-web:
         condition: service_healthy
